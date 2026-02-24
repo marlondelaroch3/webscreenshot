@@ -1,46 +1,22 @@
 const express = require('express');
-const chromium = require('@sparticuz/chromium');
-const puppeteer = require('puppeteer-core');
+const puppeteer = require('puppeteer');
 const fs = require('fs');
 const { PDFDocument } = require('pdf-lib');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Paths to look for a local browser on Windows
-const LOCAL_BROWSER_PATHS = [
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-];
-
-function getLocalBrowserPath() {
-  for (const p of LOCAL_BROWSER_PATHS) {
-    if (fs.existsSync(p)) return p;
-  }
-  return null;
-}
 
 async function getBrowserOptions() {
-  const localPath = getLocalBrowserPath();
-
-  // Locally: use system Chrome/Edge
-  if (localPath) {
-    return {
-      executablePath: localPath,
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      defaultViewport: { width: 1280, height: 800 },
-    };
-  }
-
-  // Serverless (Lambda/Vercel): use @sparticuz/chromium
   return {
-    args: chromium.args,
-    defaultViewport: chromium.defaultViewport,
-    executablePath: await chromium.executablePath(),
-    headless: chromium.headless,
+    headless: 'new',
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
+    args: [
+      '--no-sandbox', 
+      '--disable-setuid-sandbox', 
+      '--disable-dev-shm-usage',
+      '--disable-gpu'
+    ]
   };
 }
 
