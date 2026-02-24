@@ -135,7 +135,13 @@ app.get('/pdf', async (req, res) => {
   }
 });
 
+// Ruta raíz para comprobar que el servicio está vivo en Cloud Run
+app.get('/', (req, res) => {
+  res.send('API de PDF funcionando. Usa /api/pdf?url=...');
+});
+
+// Iniciar el servidor (Cloud Run inyecta el puerto en process.env.PORT)
 app.listen(PORT, () => {
-  console.log(`Servidor corriendo en http://localhost:${PORT}`);
-  console.log(`Uso: GET http://localhost:${PORT}/pdf?url=https://example.com`);
+  console.log(`Servidor corriendo en el puerto ${PORT}`);
+  console.log(`Uso: GET http://localhost:${PORT}/api/pdf?url=https://example.com`);
 });
