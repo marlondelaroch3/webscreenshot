@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3000;
 async function getBrowserOptions() {
   return {
     headless: 'new',
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
     args: [
       '--no-sandbox', 
       '--disable-setuid-sandbox', 

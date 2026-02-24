@@ -19,7 +19,8 @@ RUN npm install
 COPY . .
 
 # Le decimos a Puppeteer dónde está el Chromium que acabamos de instalar
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Cloud Run inyecta el puerto 8080 por defecto
 ENV PORT=8080
