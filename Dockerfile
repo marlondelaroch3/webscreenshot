@@ -1,29 +1,22 @@
-# Usamos una base ligera de Node.js
-FROM node:20-slim
+# Usamos la imagen OFICIAL de Puppeteer.
+# Ya trae Chrome instalado, las fuentes y todas las librerías.
+# Es a prueba de balas.
+FROM ghcr.io/puppeteer/puppeteer:21.9.0
 
-# Instalamos Chromium y TODAS las librerías gráficas de Linux que faltan (libnss3, etc.)
-RUN apt-get update && apt-get install -y \
-    chromium \
-    fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf \
-    --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+# Configuramos variables de entorno para que Puppeteer sepa qué hacer
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 
-# Creamos la carpeta de la app
 WORKDIR /usr/src/app
 
-# Copiamos e instalamos dependencias
+# Copiamos los archivos (como usuario root para evitar problemas de permisos al instalar)
+USER root
 COPY package*.json ./
-RUN npm install
-
-# Copiamos el resto del código
+RUN npm ci
 COPY . .
 
-# Le decimos a Puppeteer dónde está el Chromium que acabamos de instalar
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+# Volvemos al usuario seguro que trae la imagen
+USER pptruser
 
-# Cloud Run inyecta el puerto 8080 por defecto
-ENV PORT=8080
-EXPOSE 8080
-
-CMD [ "npm", "start" ]
+# Comando de arranque
+CMD ["node", "api/pdf.js"]
