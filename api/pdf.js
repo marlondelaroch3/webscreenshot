@@ -50,59 +50,88 @@ app.get('/pdf', async (req, res) => {
     // 'domcontentloaded' es más rápido y seguro que 'networkidle2' para webs pesadas
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
 
-    // Esperar un poco a que carguen los recursos principales (imágenes, fuentes)
-    await new Promise(r => setTimeout(r, 3000));
+    // 5. Preparar la página para una captura limpia
+    await page.evaluate(async () => {
+      // Forzar carga de imágenes lazy quitando el atributo nativo primero
+      document.querySelectorAll('img[loading="lazy"]').forEach(img => img.removeAttribute('loading'));
 
-    // 5. Scroll lento y natural para activar animaciones y lazy-loading
-    // Y tomar capturas de pantalla en cada paso
-    const screenshots = [];
-    
-    const { totalHeight, viewportHeight } = await page.evaluate(() => {
-      return {
-        totalHeight: document.body.scrollHeight,
-        viewportHeight: window.innerHeight
-      };
+      // 5a. Acelerar animaciones al máximo (NO desactivarlas)
+      const style = document.createElement('style');
+      style.innerHTML = `
+        /* Si ponemos 'none', los elementos con opacity: 0 se quedan invisibles para siempre.
+           Mejor hacemos que duren 0.01ms para que salten directo a su estado final. */
+        *, *::before, *::after {
+          transition-duration: 0.01ms !important;
+          transition-delay: 0ms !important;
+          animation-duration: 0.01ms !important;
+          animation-delay: 0ms !important;
+          scroll-behavior: auto !important;
+        }
+
+        /* Si usas AOS o librerías similares, forzamos su visibilidad por si acaso */
+        [data-aos] {
+          opacity: 1 !important;
+          transform: none !important;
+        }
+
+        /* Ocultar barras de scroll */
+        ::-webkit-scrollbar { display: none; }
+      `;
+      document.head.appendChild(style);
+
+      // 5b. Hacer un scroll fluido y humano para activar librerías JS (GSAP, Framer Motion, IntersectionObservers)
+      await new Promise((resolve) => {
+        let totalHeight = 0;
+        const distance = 100; // Un salto más pequeño es menos probable que sea ignorado por GSAP
+        const timer = setInterval(() => {
+          const scrollHeight = document.documentElement.scrollHeight;
+          window.scrollBy(0, distance);
+          totalHeight += distance;
+
+          if (totalHeight >= scrollHeight) {
+            clearInterval(timer);
+            // IMPORTANTE: ¡NO devolvemos el scroll a (0,0)! 
+            // Si volvemos arriba, librerías como GSAP ScrollTrigger o AOS detectan el scroll hacia arriba
+            // y activan su animación "reverse", volviendo a poner la opacidad en 0 antes de la captura.
+            resolve();
+          }
+        }, 50); // Múltiples saltos pequeños y rápidos
+      });
     });
 
-    let currentPosition = 0;
-    while (currentPosition < totalHeight) {
-      // Hacer scroll
-      await page.evaluate((y) => window.scrollTo(0, y), currentPosition);
-      
-      // Esperar a que las animaciones terminen
-      await new Promise(r => setTimeout(r, 3000));
-      
-      // Tomar captura de la vista actual
-      const screenshot = await page.screenshot({ type: 'jpeg', quality: 90 });
-      screenshots.push(screenshot);
-      
-      currentPosition += viewportHeight;
-    }
+    // Esperar a que las animaciones por JavaScript terminen.
+    // Como las de CSS las aceleramos a 0.01ms, ya están listas.
+    // GSAP o React pueden requerir 1-2 segundos en estabilizarse en su estado final.
+    await new Promise(r => setTimeout(r, 2500));
 
-    // 6. Crear un PDF uniendo las imágenes
-    const pdfDoc = await PDFDocument.create();
-    
-    for (const imgBuffer of screenshots) {
-      const image = await pdfDoc.embedJpg(imgBuffer);
-      const { width, height } = image.scale(1); // Mantener proporciones originales
-      
-      // Añadir una página del tamaño exacto de la captura
-      const pdfPage = pdfDoc.addPage([width, height]);
-      pdfPage.drawImage(image, {
-        x: 0,
-        y: 0,
-        width,
-        height,
-      });
-    }
+    // 6. Arreglo Universal para Headers "Sticky" y Elementos Fijos ("Fixed")
+    // Al tomar la captura completa, los menús que te persiguen tapan el contenido. 
+    // Los convertimos en absolutos/estáticos para que se queden arriba donde nacieron y no molesten al bajar.
+    await page.evaluate(() => {
+      const elements = document.querySelectorAll('*');
+      for (const el of elements) {
+        const style = window.getComputedStyle(el);
+        if (style.position === 'fixed') {
+          // Se ancla al inicio de todo el documento (ej. un navbar) o al final (un chat)
+          el.style.setProperty('position', 'absolute', 'important');
+        } else if (style.position === 'sticky') {
+          // Devuelve al flujo plano normal
+          el.style.setProperty('position', 'static', 'important');
+        }
+      }
+    });
 
-    const pdfBytes = await pdfDoc.save();
-    const pdfBuffer = Buffer.from(pdfBytes);
+    // 7. Tomar UNA SOLA captura de página completa
+    const screenshotBuffer = await page.screenshot({ 
+      fullPage: true, 
+      type: 'jpeg', 
+      quality: 80 
+    });
 
-    // 7. Devolver el archivo
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename=analisis.pdf');
-    res.status(200).send(pdfBuffer);
+    // 7. Devolver el archivo DIRECTAMENTE como imagen (Mejor para IAs)
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Content-Disposition', 'inline; filename=analisis.jpg');
+    res.status(200).send(screenshotBuffer);
 
   } catch (error) {
     res.status(500).send(error.message);
